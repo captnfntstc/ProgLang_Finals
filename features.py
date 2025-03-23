@@ -4,6 +4,10 @@ import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 
 class CompilerFeatures:
+    def __init__(self):
+        self.unsaved_changes = False
+        self.current_file = None
+
     def on_text_change(self, event=None):
         self.unsaved_changes = True
 
@@ -17,7 +21,6 @@ class CompilerFeatures:
         self.text_area.delete(1.0, tk.END)  
         self.unsaved_changes = False
 
-    
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Python Files", "*.py"), ("All Files", "*.*")])
         if file_path:
@@ -64,14 +67,6 @@ class CompilerFeatures:
             self.text_area.delete(1.0, tk.END)
             self.text_area.insert(1.0, content)
     
-    
-    def update_line_numbers(self, event=None):
-        self.line_numbers.config(state=tk.NORMAL)
-        self.line_numbers.delete(1.0, tk.END)
-        line_count = self.text_area.get(1.0, tk.END).count('\n')
-        self.line_numbers.insert(1.0, "\n".join(str(i) for i in range(1, line_count + 1)))
-        self.line_numbers.config(state=tk.DISABLED)
-    
     def display_output(self, text):
         self.output_area.config(state=tk.NORMAL)
         self.output_area.delete(1.0, tk.END)
@@ -79,45 +74,59 @@ class CompilerFeatures:
         self.output_area.config(state=tk.DISABLED)
     
     def run_lexer(self):
-        code = self.text_area.get(1.0, tk.END)
-        tokens = self.lexer(code)
-        self.display_output(f"Tokens:\n{tokens}")
+        try:
+            code = self.text_area.get(1.0, tk.END)
+            tokens = self.lexer(code)
+            self.display_output(f"Tokens:\n{tokens}")
+        except Exception as e:
+            self.display_output(f"Lexical Analysis Error: {str(e)}")
     
     def run_parser(self):
-        code = self.text_area.get(1.0, tk.END)
-        tree = self.parser(code)  
-        self.display_output("Syntax Analysis: Valid")
+        try:
+            code = self.text_area.get(1.0, tk.END)
+            tree = self.parser(code)  
+            self.display_output("Syntax Analysis: Valid")
+        except Exception as e:
+            self.display_output(f"Syntax Analysis Error: {str(e)}")
     
     def run_semantic(self):
-        code = self.text_area.get(1.0, tk.END)
-        tree = self.parser(code)
-        errors = self.semantic_analyzer(tree)
-        output = "Semantic Analysis: " + ("No issues found" if not errors else "\n".join(errors))
-        self.display_output(output)
+        try:
+            code = self.text_area.get(1.0, tk.END)
+            tree = self.parser(code)
+            errors = self.semantic_analyzer(tree)
+            output = "Semantic Analysis: " + ("No issues found" if not errors else "\n".join(errors))
+            self.display_output(output)
+        except Exception as e:
+            self.display_output(f"Semantic Analysis Error: {str(e)}")
 
     def run_ir(self):
-        code = self.text_area.get(1.0, tk.END)
-        tree = self.parser(code)
-        ir_code = self.generate_ir(tree)
-        self.display_output(f"Intermediate Code:\n{ir_code}")
-    
+        try:
+            code = self.text_area.get(1.0, tk.END)
+            tree = self.parser(code)
+            ir_code = self.generate_ir(tree)
+            self.display_output(f"Intermediate Code:\n{ir_code}")
+        except Exception as e:
+            self.display_output(f"Intermediate Code Generation Error: {str(e)}")
     
     def run_all(self):
-        code = self.text_area.get(1.0, tk.END)
-        tokens = self.lexer(code)
-        tree = self.parser(code)
-        syntax_output = "Syntax Analysis: Valid"
-        
-        errors = self.semantic_analyzer(tree)
-        semantic_output = "Semantic Analysis: " + ("No issues found" if not errors else "\n".join(errors))
-        
-        ir_code = self.generate_ir(tree)
-        
-        final_output = (f"Tokens:\n{tokens}\n\n" +
-                        f"{syntax_output}\n\n" +
-                        f"{semantic_output}\n\n" +
-                        f"Intermediate Code:\n{ir_code}")
-        self.display_output(final_output)
+        try:
+            code = self.text_area.get(1.0, tk.END)
+            tokens = self.lexer(code)
+            tree = self.parser(code)
+            syntax_output = "Syntax Analysis: Valid"
+            
+            errors = self.semantic_analyzer(tree)
+            semantic_output = "Semantic Analysis: " + ("No issues found" if not errors else "\n".join(errors))
+            
+            ir_code = self.generate_ir(tree)
+            
+            final_output = (f"Tokens:\n{tokens}\n\n" +
+                            f"{syntax_output}\n\n" +
+                            f"{semantic_output}\n\n" +
+                            f"Intermediate Code:\n{ir_code}")
+            self.display_output(final_output)
+        except Exception as e:
+            self.display_output(f"Error during compilation: {str(e)}")
     
     def lexer(self, code):
         tokens = re.findall(r'[a-zA-Z_][a-zA-Z_0-9]*|[=+\-*/()]|\d+', code)

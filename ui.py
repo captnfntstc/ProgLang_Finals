@@ -74,13 +74,15 @@ class PythonCompiler(CompilerFeatures):  # Inherit from CompilerFeatures
         self.output_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=80, height=10, state=tk.DISABLED)
         self.output_area.pack(pady=10)
 
-        # Frame for Text Area and Line Numbers
-        self.frame = tk.Frame(root)
-        self.frame.pack(pady=10, fill=tk.BOTH, expand=True)
-        
-        # Line Numbers
-        self.line_numbers = tk.Text(self.frame, width=4, height=20, state=tk.DISABLED, bg="lightgray")
-        self.line_numbers.pack(side=tk.LEFT, fill=tk.Y)
+        # Initialize line numbers
+        self.update_line_numbers()
+
+    def update_line_numbers(self, event=None):
+        self.line_numbers.config(state=tk.NORMAL)
+        self.line_numbers.delete(1.0, tk.END)
+        line_count = self.text_area.get(1.0, tk.END).count('\n') + 1
+        self.line_numbers.insert(1.0, "\n".join(str(i) for i in range(1, line_count + 1)))
+        self.line_numbers.config(state=tk.DISABLED)
 
     def show_readme(self):
         messagebox.showinfo("README", "Python Mini Compiler\n\nThis tool provides basic file operations and text editing capabilities.")
