@@ -1,7 +1,10 @@
-import re
-import ast
+import re, sys, ast, io, subprocess
 import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
+from semantic import semantic_analyzer
+from ir_generator import generate_ir
+from execution import run_code
+
 
 class CompilerFeatures:
     def __init__(self):
@@ -66,13 +69,62 @@ class CompilerFeatures:
             content = content.replace(find_str, replace_str)
             self.text_area.delete(1.0, tk.END)
             self.text_area.insert(1.0, content)
+
+    def run_code(self):
+        code = self.text_area.get("1.0", tk.END)  # Get code from text editor
+        if not code.strip():
+            messagebox.showerror("Error", "No code to run.")
+            return
+        
+        try:
+            # Run the code using subprocess and capture output
+            process = subprocess.run(["python", "-c", code], capture_output=True, text=True)
+            output = process.stdout if process.stdout else process.stderr
+            
+            # Display output in the output area
+            self.output_area.config(state=tk.NORMAL)
+            self.output_area.delete("1.0", tk.END)
+            self.output_area.insert(tk.END, output)
+            self.output_area.config(state=tk.DISABLED)
+        
+        except Exception as e:
+            messagebox.showerror("Execution Error", str(e))
     
     def display_output(self, text):
         self.output_area.config(state=tk.NORMAL)
         self.output_area.delete(1.0, tk.END)
-        self.output_area.insert(tk.END, text)
+
+        # Define color mappings for different IR instructions
+        color_tags = {
+            "STORE": "red",
+            "BINARY_OP": "yellow",
+            "LOAD_CONST": "blue",
+            "LOAD_VAR": "cyan",
+            "CALL": "green",
+            "IF_START": "magenta",
+            "RETURN": "gray"
+        }
+
+        # Configure tag colors in Tkinter text widget (MUST be done before inserting)
+        for tag, color in color_tags.items():
+            self.output_area.tag_config(tag, foreground=color)
+
+        # Apply color tags to the text
+        for line in text.split("\n"):
+            words = line.split()
+            if words:
+                instr = words[0]  # First word (IR instruction)
+                tag = color_tags.get(instr, None)  # Get corresponding color
+
+                if tag:
+                    self.output_area.insert(tk.END, line + "\n", tag)  # Insert with tag
+                    self.output_area.tag_add(tag, "end-2l linestart", "end-2l lineend")
+                else:
+                    self.output_area.insert(tk.END, line + "\n")  # Insert normally
+
         self.output_area.config(state=tk.DISABLED)
-    
+
+        
     def run_lexer(self):
         try:
             code = self.text_area.get(1.0, tk.END)
@@ -91,40 +143,51 @@ class CompilerFeatures:
     
     def run_semantic(self):
         try:
-            code = self.text_area.get(1.0, tk.END)
-            tree = self.parser(code)
-            errors = self.semantic_analyzer(tree)
+            code = self.text_area.get("1.0", tk.END).strip()  # Get code from text area
+            tree = ast.parse(code)  # Convert code to AST
+            errors = semantic_analyzer(tree)  # Call function (no 'self')
+
             output = "Semantic Analysis: " + ("No issues found" if not errors else "\n".join(errors))
-            self.display_output(output)
+            self.display_output(output)  # Show results
         except Exception as e:
             self.display_output(f"Semantic Analysis Error: {str(e)}")
 
     def run_ir(self):
         try:
-            code = self.text_area.get(1.0, tk.END)
-            tree = self.parser(code)
-            ir_code = self.generate_ir(tree)
-            self.display_output(f"Intermediate Code:\n{ir_code}")
+            code = self.text_area.get(1.0, tk.END).strip()  # Get code
+            tree = ast.parse(code)  # Parse code to AST
+            ir_code = generate_ir(tree)  # Call generate_ir (no 'self')
+
+            self.display_output(f"Intermediate Code:\n{ir_code}")  # Show output
         except Exception as e:
             self.display_output(f"Intermediate Code Generation Error: {str(e)}")
     
     def run_all(self):
         try:
-            code = self.text_area.get(1.0, tk.END)
-            tokens = self.lexer(code)
-            tree = self.parser(code)
+            code = self.text_area.get(1.0, tk.END).strip()  # Get user code
+            tokens = self.lexer(code)  # Tokenize code
+            tree = self.parser(code)  # Parse to AST
             syntax_output = "Syntax Analysis: Valid"
-            
-            errors = self.semantic_analyzer(tree)
+
+            # Run Semantic Analysis
+            errors = semantic_analyzer(tree)
             semantic_output = "Semantic Analysis: " + ("No issues found" if not errors else "\n".join(errors))
-            
-            ir_code = self.generate_ir(tree)
-            
+
+            # Generate Intermediate Representation (IR)
+            ir_code = generate_ir(tree)
+
+            # Execute Code and Capture Output
+            execution_output = run_code(code)
+
+            # Display Final Output
             final_output = (f"Tokens:\n{tokens}\n\n" +
                             f"{syntax_output}\n\n" +
-                            f"{semantic_output}\n\n" +
-                            f"Intermediate Code:\n{ir_code}")
+                            f"{semantic_output}\n\n" + "\n"
+                            f"Intermediate Code:\n{ir_code}\n\n" + "\n"
+                            f"Execution Output:\n{execution_output}")
+            
             self.display_output(final_output)
+
         except Exception as e:
             self.display_output(f"Error during compilation: {str(e)}")
     
@@ -132,34 +195,8 @@ class CompilerFeatures:
         tokens = re.findall(r'[a-zA-Z_][a-zA-Z_0-9]*|[=+\-*/()]|\d+', code)
         return tokens
     
-    def parser(self, code):
-        return ast.parse(code)
-    
-    def semantic_analyzer(self, tree):
-        errors = []
-        variables = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                if isinstance(node.targets[0], ast.Name):
-                    variables.add(node.targets[0].id)
-            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-                if node.id not in variables:
-                    errors.append(f"Undefined variable: {node.id}")
-            elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-                if isinstance(node.right, ast.Constant) and node.right.value == 0:
-                    errors.append("Division by zero detected.")
-        return errors
-    
-    def generate_ir(self, tree):
-        ir_code = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                ir_code.append(f"STORE {node.targets[0].id}")
-            elif isinstance(node, ast.BinOp):
-                ir_code.append("BINARY_OP")
-            elif isinstance(node, ast.Constant):
-                ir_code.append(f"LOAD_CONST {node.value}")
-        return "\n".join(ir_code)
+    def parser(self, tree):
+        return ast.parse(tree)
     
     def show_readme(self):
         messagebox.showinfo("README", "Python Mini Compiler\n\nThis tool provides basic file operations and text editing capabilities.")

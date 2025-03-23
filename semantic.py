@@ -1,21 +1,23 @@
 import ast
 
-def semantic_analyzer(self, tree):
+def semantic_analyzer(tree):
     errors = []
     variables = set()
 
-    # Traverse the AST
+    # Manually define built-in functions
+    predefined_functions = {"print", "len", "range", "int", "str", "float", "bool", "list", "dict", "set"}
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
-            # Handle variable assignments
-            if isinstance(node.targets[0], ast.Name):
-                variables.add(node.targets[0].id)
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    variables.add(target.id)  # Store assigned variables
+
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-            # Check if the variable is defined
-            if node.id not in variables:
+            if node.id not in variables and node.id not in predefined_functions:
                 errors.append(f"Undefined variable: {node.id}")
+
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-            # Check for division by zero
             if isinstance(node.right, ast.Constant) and node.right.value == 0:
                 errors.append("Division by zero detected.")
 
